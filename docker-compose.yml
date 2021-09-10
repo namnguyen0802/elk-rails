@@ -1,0 +1,83 @@
+version: "3"
+services:
+  elasticsearch:
+    image: elasticsearch:7.7.0
+    container_name: elasticsearch
+    hostname: elasticsearch
+    environment:
+      - "discovery.type=single-node"
+    ports:
+      - 9200:9200
+      - 9300:9300
+    networks:
+      - elknetwork
+  kibana:
+    image: kibana:7.7.0
+    container_name: kibana
+    hostname: kibana
+    ports:
+      - 5601:5601
+    links:
+      - elasticsearch:elasticsearch
+    depends_on:
+      - elasticsearch
+    networks:
+      - elknetwork
+  logstash:
+    image: docker.elastic.co/logstash/logstash:7.7.0
+    container_name: logstash
+    hostname: logstash
+    ports:
+      - 9600:9600
+      - 8089:8089
+      - 5000:5000
+    volumes:
+      - ./logstash:/usr/share/logstash/pipeline/
+    links:
+      - elasticsearch:elasticsearch
+    depends_on:
+      - elasticsearch
+    networks:
+      - elknetwork
+
+  postgres:
+    image: postgres:9.4.1
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - /usr/volumes/pgdata/etc:/etc/postgresql:Z
+      - /usr/volumes/dev/volumes/pgdata/log:/var/log/postgresql:Z
+      - /usr/volumes/pgdata/data:/var/lib/postgresql/data:Z
+    networks:
+      - elknetwork
+
+  rails:
+    build: .
+    container_name: rails
+    command: bin/docker-start-rails
+    environment:
+      - LOGSTASH_HOST=logstash
+      - POSTGRESHOST=postgres
+      - POSTGRESPASS=password
+      - POSTGRESUSER=postgres
+      - RAILS_ENV=development
+    ports:
+      - "3000:3000"
+    volumes:
+      - bundle:/bundle:Z
+      - .:/myapp:Z
+    depends_on:
+      - postgres
+    networks:
+      - elknetwork
+
+networks:
+    elknetwork:
+        driver: bridge
+
+volumes:
+  elasticsearch: {}
+  bundle: {}
+  postgres: {}
